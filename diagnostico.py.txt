@@ -1,0 +1,137 @@
+import platform
+import psutil
+import socket
+import os
+import time
+from datetime import datetime
+from colorama import init, Fore, Style
+import cpuinfo
+
+# Inicializa o colorama (necessário para Windows)
+init(autoreset=True)
+
+def limpar_tela():
+    """Limpa a tela do terminal."""
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+def formatar_bytes(byte_size):
+    # Converte bytes dividindo por 1024 para um formato legível (KB, MB, GB).
+    power = 1024
+    n = 0
+    power_labels = {0: '', 1: 'K', 2: 'M', 3: 'G', 4: 'T'}
+    while byte_size >= power and n < len(power_labels):
+        byte_size /= power
+        n += 1
+    return f"{byte_size:.2f} {power_labels[n]}B"
+
+def obter_tipo_memoria():
+    if os.name != 'nt':
+        return "Tipo não determinado (Não-Windows)"
+
+    try:
+        import comtypes.client
+        wmi_service = comtypes.client.GetObject("winmgmts:")
+        physical_memory = wmi_service.ExecQuery("SELECT MemoryType FROM Win32_PhysicalMemory")
+        # Mapeamento dos códigos
+        memory_types = {
+            20: "DDR", 21: "DDR2", 24: "DDR3", 
+            26: "DDR4", 30: "DDR5", 0: "Desconhecido"
+        }
+        # Pega o tipo do primeiro resultado encontrado
+        mem_type_code = physical_memory.ItemIndex(0).MemoryType
+        return memory_types.get(mem_type_code, f"Código Desconhecido ({mem_type_code})")
+    except Exception as e:
+        return "Não foi possível obter o tipo"
+
+
+
+def obter_informacoes_sistema():
+    # Mensagem inicial.
+    limpar_tela()
+    print(Fore.CYAN + "Iniciando a Ferramenta de Diagnóstico...")
+    print(Fore.CYAN + "As informações do sistema serão atualizadas a cada 10 segundos.")
+    print(Fore.YELLOW + "Para fechar o programa, pressione as teclas CTRL+C a qualquer momento.")
+    time.sleep(5) # Pausa de 5 segundos para o usuário ler a mensagem inicial.
+
+    try:
+        while True:
+            limpar_tela()
+
+            # Cabeçalho.
+            print(Fore.CYAN + "="*40)
+            print(Fore.CYAN + f"    Ferramenta de Diagnóstico v2.1    ")
+            print(Fore.YELLOW + f"     (Pressione CTRL+C para sair)     ")
+            print(Fore.CYAN + "="*40 + Style.RESET_ALL)
+            
+
+            # Sistema Operacional.
+            print(Fore.GREEN + "\n--- Sistema Operacional ---")
+            print(f"Sistema: {platform.system()} {platform.release()} ({platform.machine()})")
+            tempo_atividade = datetime.now() - datetime.fromtimestamp(psutil.boot_time())
+            print(f"Tempo de Atividade: {str(tempo_atividade).split('.')[0]}")
+            time.sleep(2)
+
+
+            # CPU.
+            print(Fore.YELLOW + "\n--- CPU ---")
+            nome_cpu = cpuinfo.get_cpu_info()['brand_raw']
+            print(f"Modelo: {Fore.CYAN}{nome_cpu}{Style.RESET_ALL}")
+            uso_cpu = psutil.cpu_percent(interval=0.5)
+            cor_cpu = Fore.RED if uso_cpu > 80 else Fore.GREEN
+            print(f"Uso da CPU: {cor_cpu}{uso_cpu}%{Style.RESET_ALL}")
+            print(f"Núcleos (Físicos/Threads): {psutil.cpu_count(logical=False)} / {psutil.cpu_count(logical=True)}")
+            time.sleep(2)
+
+            
+
+
+            # Memória RAM.
+            print(Fore.MAGENTA + "\n--- Memória RAM ---")
+            memoria = psutil.virtual_memory()
+            tipo_memoria = obter_tipo_memoria()
+            print(f"Tipo: {Fore.CYAN}{tipo_memoria}{Style.RESET_ALL}") # <--- NOVA LINHA
+            print(f"Total: {formatar_bytes(memoria.total)}")
+            print(f"Em uso: {formatar_bytes(memoria.used)}")
+            cor_mem = Fore.RED if memoria.percent > 80 else Fore.GREEN
+            print(f"Percentual de uso: {cor_mem}{memoria.percent}%{Style.RESET_ALL}")
+            time.sleep(2)
+
+
+            # Disco .
+            print(Fore.BLUE + "\n--- Disco (Partição Principal) ---")
+            particao_principal = 'C:/' if os.name == 'nt' else '/'
+            try:
+                disco = psutil.disk_usage('/')
+                print(f"Total: {formatar_bytes(disco.total)}")
+                print(f"Em uso: {formatar_bytes(disco.used)}")
+                cor_disco = Fore.RED if disco.percent > 80 else Fore.GREEN
+                print(f"Percentual de uso: {cor_disco}{disco.percent}%{Style.RESET_ALL}")
+            except FileNotFoundError:
+                print("Não foi possível encontrar a partição principal '/' (comum em Windows).")
+                print("Tente alterar psutil.disk_usage('/') para psutil.disk_usage('C:/') no código.")
+                time.sleep(2)
+
+
+
+            # Rede.
+            print(Fore.LIGHTBLUE_EX + "\n--- Rede ---")
+            hostname = socket.gethostname()
+            try:
+                endereco_ip = socket.gethostbyname(hostname)
+            except socket.gaierror:
+                endereco_ip = "Não foi possível obter o IP"
+            print(f"Nome do Host: {hostname}")
+            print(f"Endereço IP: {endereco_ip}")
+
+            print("\n" + Fore.CYAN + "="*40)
+            time.sleep(3)
+
+            print(Fore.YELLOW +"Essa sao as informações do seu computador, caso queira sair pressione CTRL+C")
+            # Intervalo de repetição
+            time.sleep(10) # volta no inicio do laço while depois de 10 segundos.
+
+    except KeyboardInterrupt:
+        print("\n\n" + Fore.YELLOW + "Programa finalizado pelo usuário.")
+
+if __name__ == "__main__":
+    obter_informacoes_sistema()
